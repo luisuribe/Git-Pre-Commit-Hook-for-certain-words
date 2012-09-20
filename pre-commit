@@ -7,12 +7,13 @@
 checks[1]="var_dump("
 checks[2]="print_r("
 checks[3]="die"
+checks[4]="<?="
 
 element_count=${#checks[@]}
 let "element_count = $element_count + 1"
 
 ROOT_DIR="$(pwd)/"
-LIST=$(git status | grep -e '\#.*\(modified\|added\)')
+LIST=$(git status | grep -e '\#.*\(modified\|added\|new\)')
 ERRORS_BUFFER=""
 for file in $LIST
 do
@@ -23,33 +24,45 @@ do
         FILE_ACTION="modified"
     elif [ $(echo "$file" | grep 'added') ]; then
         FILE_ACTION="added"
-    else 
+    else
         EXTENSION=$(echo "$file" | grep ".php$")
         if [ "$EXTENSION" != "" ]; then
 
             index=1
             while [ "$index" -lt "$element_count" ]
             do
-                echo "Checking $FILE_ACTION file: $file [${checks[$index]}]" 
+                #echo "Checking $FILE_ACTION file: $file [${checks[$index]}]"
                 ERRORS=$(grep "${checks[$index]}" $ROOT_DIR$file >&1)
                 if [ "$ERRORS" != "" ]; then
                     if [ "$ERRORS_BUFFER" != "" ]; then
-                        ERRORS_BUFFER="$ERRORS_BUFFER\n$ERRORS"
+                        ERRORS_BUFFER="$ERRORS_BUFFER\n${checks[$index]} found in file: $file "
                     else
-                        ERRORS_BUFFER="$ERRORS"
+                        ERRORS_BUFFER="${checks[$index]} found in file: $file "
                     fi
-                    echo "${checks[$index]} found in file: $file "
+                    #echo "${checks[$index]} found in file: $file "
                 fi
+
                 let "index = $index + 1"
             done
+
+            # PHP -l checks
+            ERRORS=$(php -l $ROOT_DIR$file 2>&1)
+            if [ "$ERRORS" != "" ]; then
+                if [ "$ERRORS_BUFFER" != "" ]; then
+                    ERRORS_BUFFER="$ERRORS_BUFFER\n$ERRORS"
+                else
+                    ERRORS_BUFFER="$ERRORS"
+                fi
+            fi
+
         fi
     fi
 done
 if [ "$ERRORS_BUFFER" != "" ]; then
-    echo 
+    echo
     echo "These errors were found in try-to-commit files: "
     echo -e $ERRORS_BUFFER
-    echo 
+    echo
     echo "Can't commit, fix errors first."
     exit 1
 else
